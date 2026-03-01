@@ -1,0 +1,23 @@
+{
+  "name": "movecar",
+  "version": "1.0.0",
+  "description": "智能挪车通知系统 - Docker版本",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": [
+    "movecar",
+    "notification",
+    "bark"
+  ],
+  "author": "lesnolie,viklion",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.4.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

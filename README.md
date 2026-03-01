@@ -1,6 +1,10 @@
 ﻿# MoveCar - 挪车通知系统
 
-基于 Cloudflare Workers 的智能挪车通知系统，扫码即可通知车主，保护双方隐私。
+智能挪车通知系统Docker版，扫码即可通知车主，保护双方隐私。
+> 与原作者cloudflare workers版本的区别：  
+> 1. 增加车牌号显示（环境变量未设置则不显示）
+> 1. 设置手机号的情况下，只有当车主确认后，请求者才能看到手机号
+> 1. 未共享位置的情况下，隐藏高德和苹果地图的查看位置按钮
 
 ## 界面预览
 
@@ -66,53 +70,33 @@
   ▼                                  ▼
 ```
 
-## 部署教程
+## Docker 部署教程
 
-### 第一步：注册 Cloudflare 账号
+### Docker Compose
 
-1. 打开 https://dash.cloudflare.com/sign-up
-2. 输入邮箱和密码，完成注册
-
-### 第二步：创建 Worker
-
-1. 登录后点击左侧菜单「Workers & Pages」
-2. 点击「Create」→「Create Worker」
-3. 名称填 `movecar`（或你喜欢的名字）
-4. 点击「Deploy」
-5. 点击「Edit code」，删除默认代码
-6. 复制 `movecar.js` 全部内容粘贴进去
-7. 点击右上角「Deploy」保存
-
-### 第三步：创建 KV 存储
-
-1. 左侧菜单点击「KV」
-2. 点击「Create a namespace」
-3. 名称填 `MOVE_CAR_STATUS`，点击「Add」
-4. 回到你的 Worker →「Settings」→「Bindings」
-5. 点击「Add」→「KV Namespace」
-6. Variable name 填 `MOVE_CAR_STATUS`
-7. 选择刚创建的 namespace，点击「Deploy」
-
-### 第四步：配置环境变量
-
-1. Worker →「Settings」→「Variables and Secrets」
-2. 添加以下变量：
-   - `BARK_URL`：你的 Bark 推送地址（如 `https://api.day.app/xxxxx`）
-   - `PHONE_NUMBER`：备用联系电话（可选）
-
-### 第五步：绑定域名（可选）
-
-1. Worker →「Settings」→「Domains & Routes」
-2. 点击「Add」→「Custom Domain」
-3. 输入你的域名，按提示完成 DNS 配置
+```
+services:
+  movecar:
+    image: viklion/movecar:latest
+    container_name: movecar
+    restart: unless-stopped
+    ports:
+      - "3000:3000" #映射端口
+    environment:
+      - BARK_URL=           #bark推送地址
+      - PHONE_NUMBER=       #手机号
+      - CAR_NUMBER=         #车牌号
+      # - ALLOWED_COUNTRIES=    #允许访问的国家代码，多个用逗号分隔 例如: CN,HK,MO,TW
+      # - ENABLE_GEO_CHECK=     #启用地理位置检查 true/false
+```
 
 ## 制作挪车码
 
 ### 生成二维码
 
-1. 复制你的 Worker 地址（如 `https://movecar.你的账号.workers.dev`）
+1. 使用你的域名反向代理
 2. 使用任意二维码生成工具（如 草料二维码、QR Code Generator）
-3. 将链接转换为二维码并下载
+3. 将域名转换为二维码并下载
 
 ### 美化挪车牌
 
@@ -135,34 +119,19 @@
 ![挪车码效果](demo.jpg)
 
 ## 安全设置（推荐）
+****docker版未测试是否有效***
 
-为防止境外恶意攻击，建议只允许中国地区访问：
+环境变量设置：
+```bash
+# 启用地理位置检查
+ENABLE_GEO_CHECK=true
 
-### 方法一：使用 WAF 规则（推荐）
-
-1. 进入 Cloudflare Dashboard → 你的域名
-2. 左侧菜单点击「Security」→「WAF」
-3. 点击「Create rule」
-4. 规则设置：
-   - Rule name：`Block non-CN traffic`
-   - If incoming requests match：`Country does not equal China`
-   - Then：`Block`
-5. 点击「Deploy」
-
-### 方法二：在 Worker 代码中过滤
-
-在 `movecar.js` 的 `handleRequest` 函数开头添加：
-
-```javascript
-async function handleRequest(request) {
-  const country = request.cf?.country;
-  if (country && country !== 'CN') {
-    return new Response('Access Denied', { status: 403 });
-  }
-
-  // 下面保持原有逻辑
-}
+# 只允许中国地区访问
+ALLOWED_COUNTRIES=CN
 ```
+为防止境外恶意攻击，建议只允许中国地区访问
+
+
 
 > ⚠️ 曾经被境外流量攻击过，强烈建议开启地区限制！
 
