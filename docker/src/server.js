@@ -48,8 +48,48 @@ function generateMapUrls(lat, lng) {
   };
 }
 
+function getClientIP(req) {
+  // 支持多种代理场景，优先级从高到低：
+  // 1. Cloudflare CF-Connecting-IP (最优先，Cloudflare的真实客户IP)
+  // 2. X-Forwarded-For (多层代理时取第一个IP)
+  // 3. X-Real-IP (Nginx反向代理)
+  // 4. 原始socket连接IP (直连或未配置代理头)
+  return (
+    req.headers['cf-connecting-ip'] ||
+    req.headers['x-forwarded-for']?.split(',')[0].trim() ||
+    req.headers['x-real-ip'] ||
+    req.socket.remoteAddress
+  );
+}
+
 async function handleNotify(req, res, origin) {
   try {
+    const clientIP = getClientIP(req);
+    
+    // 检查IP限流，传入配置参数
+    const rateLimitCheck = storage.checkRateLimit(clientIP, {
+      maxRequestsPer5Min: config.rateLimit.maxRequestsPer5Min,
+      maxRequestsPerDay: config.rateLimit.maxRequestsPerDay
+    });
+    
+    if (!rateLimitCheck.allowed) {
+      res.writeHead(429, { 'Content-Type': 'application/json' });
+      
+      if (rateLimitCheck.violations.dailyExceeded) {
+        return res.end(JSON.stringify({
+          success: false,
+          error: 'rate_limit_daily_exceeded',
+          message: '您今天已发送过多次通知，无法继续发送'
+        }));
+      } else if (rateLimitCheck.violations.tooFrequent) {
+        return res.end(JSON.stringify({
+          success: false,
+          error: 'rate_limit_5min',
+          message: '操作过于频繁，请5分钟后再试'
+        }));
+      }
+    }
+
     let body = '';
     for await (const chunk of req) body += chunk;
     const data = JSON.parse(body);
@@ -92,6 +132,9 @@ async function handleNotify(req, res, origin) {
     const barkResponse = await fetch(barkApiUrl);
     if (!barkResponse.ok) throw new Error('Bark API Error');
 
+    // 记录IP请求
+    storage.recordRequest(clientIP);
+
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ success: true }));
   } catch (error) {
@@ -129,6 +172,11 @@ async function handleOwnerConfirm(req, res) {
     }
 
     await storage.put('notify_status', 'confirmed', { expirationTtl: config.storage.statusTtl });
+    
+    // 记录请求者IP的确认状态
+    const clientIP = getClientIP(req);
+    storage.recordIPConfirmed(clientIP, config.ipConfirmation.recordTime);
+    
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ success: true }));
   } catch (error) {
@@ -155,7 +203,7 @@ async function handleCheckStatus(req, res) {
   res.end(JSON.stringify(response));
 }
 
-function renderMainPage(origin) {
+function renderMainPage(origin, showSuccessView = false) {
   const phone = config.phone.number;
   const carNumber = config.car.number;
   return `<!DOCTYPE html>
@@ -642,6 +690,17 @@ function renderMainPage(origin) {
     </div>
   </div>
 
+  <div id="rateLimitModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-icon" id="rateLimitIcon">⚠️</div>
+      <div class="modal-title" id="rateLimitTitle">操作过于频繁</div>
+      <div class="modal-desc" id="rateLimitDesc">请稍候再试</div>
+      <div class="modal-buttons">
+        <button class="modal-btn modal-btn-primary" onclick="hideModal('rateLimitModal')">知道了</button>
+      </div>
+    </div>
+  </div>
+
   <div class="container" id="mainView">
     <div class="card header">
       <div class="icon-wrap"><span>🚗</span></div>
@@ -802,7 +861,20 @@ function renderMainPage(origin) {
           document.getElementById('successView').style.display = 'flex';
           startStatusCheck();
         } else {
-          showToast(data.error || '发送失败');
+          // 处理限流错误
+          if (data.error === 'rate_limit_daily_exceeded') {
+            document.getElementById('rateLimitIcon').textContent = '🚫';
+            document.getElementById('rateLimitTitle').textContent = '超出每日限制';
+            document.getElementById('rateLimitDesc').textContent = data.message || '您今天已发送过多次通知，无法继续发送';
+            showModal('rateLimitModal');
+          } else if (data.error === 'rate_limit_5min') {
+            document.getElementById('rateLimitIcon').textContent = '⏱️';
+            document.getElementById('rateLimitTitle').textContent = '操作过于频繁';
+            document.getElementById('rateLimitDesc').textContent = data.message || '请5分钟后再试';
+            showModal('rateLimitModal');
+          } else {
+            showToast(data.message || data.error || '发送失败');
+          }
           btn.disabled = false;
           btn.innerHTML = '<span>🔔</span><span>通知车主</span>';
         }
@@ -856,6 +928,13 @@ function renderMainPage(origin) {
     if (localStorage.getItem('locationTipShown') !== 'true') {
       showModal('locationTipModal');
       localStorage.setItem('locationTipShown', 'true');
+    }
+
+    // 如果该IP在10分钟内有确认记录，直接显示成功页面
+    if (${showSuccessView}) {
+      document.getElementById('mainView').style.display = 'none';
+      document.getElementById('successView').style.display = 'flex';
+      startStatusCheck();
     }
   </script>
 </body>
@@ -1309,14 +1388,26 @@ async function handleRequest(req, res) {
     return res.end(renderOwnerPage(origin));
   }
 
+  // 检查该IP是否在10分钟内有确认记录
+  const clientIP = getClientIP(req);
+  const ipConfirmedRecently = await storage.isIPConfirmedRecently(clientIP);
+  
   res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-  res.end(renderMainPage(origin));
+  res.end(renderMainPage(origin, ipConfirmedRecently));
 }
 
 const server = http.createServer(handleRequest);
 
 server.listen(config.server.port, config.server.host, () => {
+  // 容器启动时清除所有IP确认缓存
+  storage.clearAllIPConfirmations();
+  
   console.log(`MoveCar server running at http://${config.server.host}:${config.server.port}`);
   console.log(`BARK_URL configured: ${config.bark.url ? 'Yes' : 'No'}`);
   console.log(`PHONE_NUMBER configured: ${config.phone.number ? 'Yes' : 'No'}`);
+  console.log(`CAR_NUMBER configured: ${config.car.number ? 'Yes' : 'No'}`);
+  console.log(`RATE_LIMIT_5MIN configured: ${config.rateLimit.maxRequestsPer5Min}`);
+  console.log(`RATE_LIMIT_DAILY configured: ${config.rateLimit.maxRequestsPerDay}`);
+  console.log(`RECORD_TIME configured: ${config.ipConfirmation.recordTime}s`);
+  console.log(`IP confirmation cache cleared on startup`);
 });

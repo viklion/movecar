@@ -6,8 +6,11 @@ services:
     ports:
       - "3000:3000" #映射端口
     environment:
-      - BARK_URL=           #bark推送地址
-      - PHONE_NUMBER=       #手机号
-      - CAR_NUMBER=         #车牌号
+      - BARK_URL=               #bark推送地址
+      - PHONE_NUMBER=           #手机号
+      - CAR_NUMBER=             #车牌号
+      - RATE_LIMIT_5MIN=0       #单个IP在5分钟内最多发送的通知次数，0表示不限制
+      - RATE_LIMIT_DAILY=0      #单个IP每天最多发送的通知次数，0表示不限制
+      - RECORD_TIME=600         #IP确认记录的有效时间，单位秒，默认600秒（10分钟）
       # - ALLOWED_COUNTRIES=    #允许访问的国家代码，多个用逗号分隔 例如: CN,HK,MO,TW
       # - ENABLE_GEO_CHECK=     #启用地理位置检查 true/false

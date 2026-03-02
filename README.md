@@ -5,6 +5,33 @@
 > 1. 增加车牌号显示（环境变量未设置则不显示）
 > 1. 设置手机号的情况下，只有当车主确认后，请求者才能看到手机号
 > 1. 未共享位置的情况下，隐藏高德和苹果地图的查看位置按钮
+> 1. 可限制单IP的5分钟内可发送通知数和当天可发送通知数
+> 1. 可设置请求者发送通知并且车主确认后的一段时间内，同一请求者再次扫码直接显示车主已确认界面  
+> 
+> **重启容器重置所有计数、时间、ip记录*
+
+## Docker 部署教程
+
+### Docker Compose
+
+```
+services:
+  movecar:
+    image: viklion/movecar:latest
+    container_name: movecar
+    restart: unless-stopped
+    ports:
+      - "3000:3000" #映射端口
+    environment:
+      - BARK_URL=               #bark推送地址
+      - PHONE_NUMBER=           #手机号
+      - CAR_NUMBER=             #车牌号
+      - RATE_LIMIT_5MIN=0       #单个IP在5分钟内最多发送的通知次数，0表示不限制
+      - RATE_LIMIT_DAILY=0      #单个IP每天最多发送的通知次数，0表示不限制
+      - RECORD_TIME=600         #IP确认记录的有效时间，单位秒，默认600秒（10分钟）
+      # - ALLOWED_COUNTRIES=    #允许访问的国家代码，多个用逗号分隔 例如: CN,HK,MO,TW
+      # - ENABLE_GEO_CHECK=     #启用地理位置检查 true/false
+```
 
 ## 界面预览
 
@@ -58,9 +85,7 @@
   │                                  │
   ├─ 扫码进入页面                     │
   ├─ 填写留言、获取位置                │
-  ├─ 点击发送                         │
-  │   ├─ 有位置 → 立即推送 ──────────→ 收到通知
-  │   └─ 无位置 → 30秒后推送 ────────→ 收到通知
+  ├─ 点击发送 ───────────────────────→├─收到通知
   │                                  │
   ├─ 等待中...                        ├─ 查看请求者位置
   │                                  ├─ 点击确认，分享位置
@@ -68,26 +93,6 @@
   ├─ 收到确认，查看车主位置 ←──────────┤
   │                                  │
   ▼                                  ▼
-```
-
-## Docker 部署教程
-
-### Docker Compose
-
-```
-services:
-  movecar:
-    image: viklion/movecar:latest
-    container_name: movecar
-    restart: unless-stopped
-    ports:
-      - "3000:3000" #映射端口
-    environment:
-      - BARK_URL=           #bark推送地址
-      - PHONE_NUMBER=       #手机号
-      - CAR_NUMBER=         #车牌号
-      # - ALLOWED_COUNTRIES=    #允许访问的国家代码，多个用逗号分隔 例如: CN,HK,MO,TW
-      # - ENABLE_GEO_CHECK=     #启用地理位置检查 true/false
 ```
 
 ## 制作挪车码
