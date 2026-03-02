@@ -1415,6 +1415,7 @@ async function handleRequest(req, res) {
 const server = http.createServer(handleRequest);
 
 server.listen(config.server.port, config.server.host, () => {
+  console.log(`MoveCar VERSION V${config.version}`);
   console.log(`MoveCar server running at http://${config.server.host}:${config.server.port}`);
   console.log(`BARK_URL configured: ${config.bark.url ? 'Yes' : 'No'}`);
   console.log(`PHONE_NUMBER configured: ${config.phone.number ? 'Yes' : 'No'}`);

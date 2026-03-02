@@ -1,6 +1,7 @@
 require('dotenv').config();
 
 module.exports = {
+  version: '1.0.0',
   server: {
     port: parseInt(process.env.PORT, 10) || 3000,
     host: '0.0.0.0'

@@ -1,6 +1,5 @@
 {
   "name": "movecar",
-  "version": "1.0.0",
   "description": "智能挪车通知系统 - Docker版本",
   "main": "server.js",
   "scripts": {
