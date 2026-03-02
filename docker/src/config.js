@@ -10,7 +10,9 @@ module.exports = {
     icon: 'https://cdn-icons-png.flaticon.com/512/741/741407.png'
   },
   phone: {
-    number: process.env.PHONE_NUMBER || ''
+    number: process.env.PHONE_NUMBER || '',
+    // 是否隐藏手机号，true=只有车主确认后才显示，false=发送通知后就显示（默认：false）
+    hideUntilConfirmed: process.env.HIDE_PHONE_NUMBER === 'true'
   },
   car: {
     number: process.env.CAR_NUMBER || ''
@@ -30,7 +32,7 @@ module.exports = {
     maxRequestsPerDay: parseInt(process.env.RATE_LIMIT_DAILY, 10) || 0
   },
   ipConfirmation: {
-    // IP确认缓存时间（秒），默认10分钟（600秒）
-    recordTime: parseInt(process.env.RECORD_TIME, 10) || 600
+    // IP确认缓存时间（秒），默认0表示关闭此功能，设置大于0的值启用
+    recordTime: process.env.RECORD_TIME !== undefined ? parseInt(process.env.RECORD_TIME, 10) : 0
   }
 };

@@ -173,9 +173,11 @@ async function handleOwnerConfirm(req, res) {
 
     await storage.put('notify_status', 'confirmed', { expirationTtl: config.storage.statusTtl });
     
-    // 记录请求者IP的确认状态
-    const clientIP = getClientIP(req);
-    storage.recordIPConfirmed(clientIP, config.ipConfirmation.recordTime);
+    // 只有在RECORD_TIME > 0时才记录请求者IP的确认状态
+    if (config.ipConfirmation.recordTime > 0) {
+      const clientIP = getClientIP(req);
+      storage.recordIPConfirmed(clientIP, config.ipConfirmation.recordTime);
+    }
     
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ success: true }));
@@ -194,9 +196,19 @@ async function handleCheckStatus(req, res) {
     ownerLocation: ownerLocation ? JSON.parse(ownerLocation) : null
   };
   
-  // 只有在车主确认后才返回手机号码
-  if (status === 'confirmed' && config.phone.number) {
-    response.phone = config.phone.number;
+  // 根据配置决定何时返回手机号码
+  if (config.phone.number) {
+    if (config.phone.hideUntilConfirmed) {
+      // 隐藏模式：只有车主确认后才返回手机号
+      if (status === 'confirmed') {
+        response.phone = config.phone.number;
+      }
+    } else {
+      // 非隐藏模式：只要发送了通知就返回手机号（即status存在）
+      if (status) {
+        response.phone = config.phone.number;
+      }
+    }
   }
   
   res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -897,6 +909,15 @@ function renderMainPage(origin, showSuccessView = false) {
         const res = await fetch('/api/check-status');
         const data = await res.json();
 
+        // 根据配置决定何时显示电话按钮
+        const showPhoneBtn = data.phone ? true : false;
+        if (showPhoneBtn) {
+          const phoneBtn = document.getElementById('phoneBtn');
+          phoneBtn.href = 'tel:' + data.phone;
+          document.getElementById('phoneBtnText').textContent = '拨打电话: ' + data.phone;
+          phoneBtn.classList.remove('hidden');
+        }
+
         if (data.status === 'confirmed') {
           clearInterval(statusCheckTimer);
           
@@ -911,14 +932,6 @@ function renderMainPage(origin, showSuccessView = false) {
           document.getElementById('checkBtn').disabled = true;
           document.getElementById('checkBtn').innerHTML = '<span>✅</span><span>车主已确认</span>';
           document.getElementById('actionHint').textContent = '车主正在赶来，请稍候...';
-          
-          // 显示手机号码按钮
-          if (data.phone) {
-            const phoneBtn = document.getElementById('phoneBtn');
-            phoneBtn.href = 'tel:' + data.phone;
-            document.getElementById('phoneBtnText').textContent = '拨打电话: ' + data.phone;
-            phoneBtn.classList.remove('hidden');
-          }
         }
       } catch (e) {
         console.error('Check status error:', e);
@@ -1388,9 +1401,12 @@ async function handleRequest(req, res) {
     return res.end(renderOwnerPage(origin));
   }
 
-  // 检查该IP是否在10分钟内有确认记录
-  const clientIP = getClientIP(req);
-  const ipConfirmedRecently = await storage.isIPConfirmedRecently(clientIP);
+  // 只有在RECORD_TIME > 0时才检查IP确认缓存
+  let ipConfirmedRecently = false;
+  if (config.ipConfirmation.recordTime > 0) {
+    const clientIP = getClientIP(req);
+    ipConfirmedRecently = await storage.isIPConfirmedRecently(clientIP);
+  }
   
   res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
   res.end(renderMainPage(origin, ipConfirmedRecently));
@@ -1399,15 +1415,12 @@ async function handleRequest(req, res) {
 const server = http.createServer(handleRequest);
 
 server.listen(config.server.port, config.server.host, () => {
-  // 容器启动时清除所有IP确认缓存
-  storage.clearAllIPConfirmations();
-  
   console.log(`MoveCar server running at http://${config.server.host}:${config.server.port}`);
   console.log(`BARK_URL configured: ${config.bark.url ? 'Yes' : 'No'}`);
   console.log(`PHONE_NUMBER configured: ${config.phone.number ? 'Yes' : 'No'}`);
+  console.log(`HIDE_PHONE_NUMBER configured: ${config.phone.hideUntilConfirmed ? 'Yes (hidden until confirmed)' : 'No (shown after notify)'}`);
   console.log(`CAR_NUMBER configured: ${config.car.number ? 'Yes' : 'No'}`);
   console.log(`RATE_LIMIT_5MIN configured: ${config.rateLimit.maxRequestsPer5Min}`);
   console.log(`RATE_LIMIT_DAILY configured: ${config.rateLimit.maxRequestsPerDay}`);
   console.log(`RECORD_TIME configured: ${config.ipConfirmation.recordTime}s`);
-  console.log(`IP confirmation cache cleared on startup`);
 });

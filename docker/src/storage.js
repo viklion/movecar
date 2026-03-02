@@ -3,6 +3,7 @@ class MemoryStorage {
     this.store = new Map();
     this.timers = new Map();
     this.ipRateLimit = new Map(); // IP限流记录：{ ip: { count5min: [], countDaily: [] } }
+    this.ipConfirmation = new Map(); // IP确认记录：{ ip: { timestamp, expireTime } }
   }
 
   async get(key) {
@@ -120,33 +121,25 @@ class MemoryStorage {
   }
 
   // 记录IP请求已被确认
-  // recordTime: 过期时间（秒），默认10分钟
-  recordIPConfirmed(ip, recordTime = 600) {
+  // recordTime: 过期时间（秒）
+  recordIPConfirmed(ip, recordTime) {
     const now = Date.now();
-    const key = `ip_confirmed_${ip}`;
-    this.put(key, { timestamp: now }, { expirationTtl: recordTime });
+    const expireTime = now + (recordTime * 1000);
+    this.ipConfirmation.set(ip, { timestamp: now, expireTime });
   }
 
-  // 检查IP是否在10分钟内有确认记录
+  // 检查IP是否在指定时间内有确认记录
   async isIPConfirmedRecently(ip) {
-    const key = `ip_confirmed_${ip}`;
-    const data = await this.get(key);
-    return data !== null;
-  }
-
-  // 清除所有IP确认缓存（容器重启时调用）
-  clearAllIPConfirmations() {
-    // 清除所有ip_confirmed_*的key
-    for (const [key] of this.store) {
-      if (key.startsWith('ip_confirmed_')) {
-        this.store.delete(key);
-        const timer = this.timers.get(key);
-        if (timer) {
-          clearTimeout(timer);
-          this.timers.delete(key);
-        }
-      }
+    const data = this.ipConfirmation.get(ip);
+    if (!data) return false;
+    
+    // 检查是否已过期
+    if (Date.now() > data.expireTime) {
+      this.ipConfirmation.delete(ip);
+      return false;
     }
+    
+    return true;
   }
 }
 
