@@ -16,7 +16,9 @@ module.exports = {
     hideUntilConfirmed: process.env.HIDE_PHONE_NUMBER === 'true'
   },
   car: {
-    number: process.env.CAR_NUMBER || ''
+    number: process.env.CAR_NUMBER || '',
+    // 是否隐藏车牌号，true=隐藏第3-5位，false=显示完整车牌号（默认：false）
+    hideNumber: process.env.HIDE_CAR_NUMBER === 'true'
   },
   storage: {
     ttl: parseInt(process.env.KV_TTL, 10) || 3600,

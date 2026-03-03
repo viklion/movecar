@@ -4,6 +4,7 @@
 `linux/amd64, linux/arm64`
 > 与原作者cloudflare workers版本的区别：  
 > 1. 增加车牌号显示，未设置则不显示 [CAR_NUMBER]
+> 1. 设置车牌号的情况下，可隐藏车牌第3-5位，显示为'*' [HIDE_CAR_NUMBER]
 > 1. 设置手机号的情况下，可隐藏手机号，只有当车主确认后，请求者才能看到手机号 [HIDE_PHONE_NUMBER]
 > 1. 未共享位置的情况下，隐藏高德和苹果地图的查看位置按钮
 > 1. 可限制单IP的5分钟内可发送通知数和当天可发送通知数 [RATE_LIMIT_5MIN,RATE_LIMIT_DAILY]
@@ -29,6 +30,7 @@ services:
       - PHONE_NUMBER=           #手机号
       - HIDE_PHONE_NUMBER=false #是否隐藏手机号，true:只有车主确认后才显示，false:发送通知后就显示（默认：false）
       - CAR_NUMBER=             #车牌号
+      - HIDE_CAR_NUMBER=false   #是否隐藏车牌号，true:第3-5位显示为'*'，false:显示完整车牌号（默认：false）
       - RATE_LIMIT_5MIN=0       #相同IP在5分钟内最多发送的通知次数，0表示不限制（默认：0）
       - RATE_LIMIT_DAILY=0      #相同IP每天最多发送的通知次数，0表示不限制（默认：0）
       - RECORD_TIME=0           #IP确认记录的有效时间，单位秒，0为关闭记录功能（默认：0）

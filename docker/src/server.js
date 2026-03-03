@@ -48,6 +48,12 @@ function generateMapUrls(lat, lng) {
   };
 }
 
+function hideCarNumber(carNumber) {
+  if (!carNumber || carNumber.length < 5) return carNumber;
+  // 隐藏第3、4、5位（索引2、3、4），用*号代替
+  return carNumber.substring(0, 2) + '***' + carNumber.substring(5);
+}
+
 function getClientIP(req) {
   // 支持多种代理场景，优先级从高到低：
   // 1. Cloudflare CF-Connecting-IP (最优先，Cloudflare的真实客户IP)
@@ -211,13 +217,26 @@ async function handleCheckStatus(req, res) {
     }
   }
   
+  // 根据配置决定是否隐藏车牌号
+  if (config.car.number) {
+    if (config.car.hideNumber) {
+      response.carNumber = hideCarNumber(config.car.number);
+    } else {
+      response.carNumber = config.car.number;
+    }
+  }
+  
   res.writeHead(200, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify(response));
 }
 
 function renderMainPage(origin, showSuccessView = false) {
   const phone = config.phone.number;
-  const carNumber = config.car.number;
+  let carNumber = config.car.number;
+  // 根据配置决定是否隐藏车牌号
+  if (carNumber && config.car.hideNumber) {
+    carNumber = hideCarNumber(carNumber);
+  }
   return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
